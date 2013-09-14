@@ -34,9 +34,8 @@ class BannerCourse
 
   #
   # A regular expression which parses a Banner course body.
-  # TODO: Update me to include the course description / credits / etc?
   #
-  COURSE_BODY_FORMAT = /(?<description>[^\n]+).*Class\n(?<time_range>[^\n]+)\n(?<days>[^\n]+)\n(?<room>[^\n]+)\n(?<date_range>[^\n]+)\n(?<type>[^\n]+)\n(?<instructor>[^\n]+)/m
+  COURSE_BODY_FORMAT = /(?<description>.+)\nAssociated Term: (?<term>[^\n]+).*\nRegistration Dates: (?<registration_window>[^\n]+).*(?<credit_count>\d\.\d+) Credits.*Class\n(?<time_range>[^\n]+)\n(?<days>[^\n]+)\n(?<room>[^\n]+)\n(?<date_range>[^\n]+)\n(?<type>[^\n]+)\n(?<instructor>[^\n]+)/m
 
   #
   # Creates an array of BannerCourses by parsing a Banner detailed course view.
@@ -45,7 +44,7 @@ class BannerCourse
   # _no_ clean way to machine parse their course output, we resort to this.
   #
   def self.collection_from_html(html)
-   
+
     #Parse the HTML into an XML tree.
     document = Nokogiri::HTML(html)
 
@@ -126,32 +125,33 @@ class BannerCourse
   # header row in the course summary table.
   #
   def self.extract_info_from_header(row)
-
-    #Extract the course's header text from the course info.
-#    header_element = row.text
-#    header_text = header_element.text
-
-    #And return the core course information. 
     match_data_to_hash(COURSE_HEADER_FORMAT.match(row.text))
-
   end
 
 
   #
-  #
+  # Extract information about the course from the main body
+  # of the course information in the course summary table.
   #
   def self.extract_info_from_body(row)
+    puts row.text
     match_data_to_hash(COURSE_BODY_FORMAT.match(row.text))
   end
 
 
+  #
+  # Converts a collection of match data into a hash.
+  #
   def self.match_data_to_hash(match_data)
  
     #Convert the match names to symbols...
     symbols = match_data.names.map { |name| name.to_sym }
 
+    #Remove any leading and trailing whitespace from the match_data.
+    captures = match_data.captures.map { |value| value.strip }
+
     #... and convert the symbols and match data to a new Hash.
-    Hash[symbols.zip(match_data.captures)]
+    Hash[symbols.zip(captures)]
   end
 
 

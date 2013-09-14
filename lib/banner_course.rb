@@ -1,4 +1,6 @@
 
+require 'date'
+require 'time'
 require 'nokogiri'
 
 #
@@ -27,14 +29,14 @@ class BannerCourse
   # - A section name, e.g. A 0.
   #
   #
-  COURSE_HEADER_FORMAT = /^(?<name>[^-]+) - (?<crn>\d+) - (?<number>[^-]+) - (?<section>[^-]+)$/
+  COURSE_HEADER_FORMAT = /^\W(?<name>[^-]+) - (?<crn>\d+) - (?<number>[^-]+) - (?<section>[^-]+)\W$/
 
 
   #
   # A regular expression which parses a Banner course body.
   # TODO: Update me to include the course description / credits / etc?
   #
-  COURSE_BODY_FORMAT = /(?<description>[^\n]+).*Class\n(?<time>[^\n]+)\n(?<days>[^\n]+)\n(?<room>[^\n]+)\n(?<dates>[^\n]+)\n(?<type>[^\n]+)\n(?<instructor>[^\n]+)/m
+  COURSE_BODY_FORMAT = /(?<description>[^\n]+).*Class\n(?<time_range>[^\n]+)\n(?<days>[^\n]+)\n(?<room>[^\n]+)\n(?<date_range>[^\n]+)\n(?<type>[^\n]+)\n(?<instructor>[^\n]+)/m
 
   #
   # Creates an array of BannerCourses by parsing a Banner detailed course view.
@@ -61,6 +63,9 @@ class BannerCourse
 
     end
 
+    #Return the newly-created collection of nodes.
+    nodes
+
   end
 
   #
@@ -74,29 +79,67 @@ class BannerCourse
     #Merge in any information from the body.
     info.update(extract_info_from_body(body))
 
-    p info
-    
+    info[:date_range] = extract_dates(info[:date_range])
+    info[:start_time], info[:duration] = extract_time_and_duration(info[:time_range])
+
     #For now, return the info directly.
     info
 
   end
 
-
   #
+  # Converts a banner date into a defined start and end date.
+  # Returns [start_date, end_date].
   # 
+  def self.extract_dates(date_range)
+
+    #Break the date range into its pieces, and then parse them.
+    start_date, _,  end_date = date_range.partition(' - ')
+    return Date.parse(start_date), Date.parse(end_date)
+
+  end
+
   #
-  def self.extract_info_from_header(row)
+  # Converts a banner start and end time to a "raw" start time 
+  # (which is represented as seconds past minute on a given day)
+  # and a duration in seconds.
+  #
+  def self.extract_time_and_duration(time_range)
 
-    #Extract the course's header text from the course info.
-    header_element = row.css(COURSE_HEADER_SELECTOR).first
-    header_text = header_element.text
+    #Break the time range down into its pieces.
+    start_time, _, end_time = time_range.partition(' - ')
+    
+    #Find the starting time, with respect to the current day.
+    relative_start_time = Time.parse(start_time) - Time.parse("12:00 AM")
 
-    #And return the core course information. 
-    match_data_to_hash(COURSE_HEADER_FORMAT.match(header_text))
+    #Find the duration of the event, in minutes.
+    duration = Time.parse(end_time) - Time.parse(start_time)
+
+    #Return the duration (in seconds) and the relative start time.
+    return relative_start_time, duration
 
   end
 
 
+  #
+  # Extract information about the course from the course's
+  # header row in the course summary table.
+  #
+  def self.extract_info_from_header(row)
+
+    #Extract the course's header text from the course info.
+#    header_element = row.text
+#    header_text = header_element.text
+
+    #And return the core course information. 
+    match_data_to_hash(COURSE_HEADER_FORMAT.match(row.text))
+
+  end
+
+
+  #
+  #
+  #
   def self.extract_info_from_body(row)
     match_data_to_hash(COURSE_BODY_FORMAT.match(row.text))
   end

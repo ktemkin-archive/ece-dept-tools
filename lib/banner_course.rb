@@ -38,6 +38,20 @@ class BannerCourse
   COURSE_BODY_FORMAT = /(?<description>.+)\nAssociated Term: (?<term>[^\n]+).*\nRegistration Dates: (?<registration_window>[^\n]+).*(?<credit_count>\d\.\d+) Credits.*Class\n(?<time_range>[^\n]+)\n(?<days>[^\n]+)\n(?<room>[^\n]+)\n(?<date_range>[^\n]+)\n(?<type>[^\n]+)\n(?<instructor>[^\n]+)/m
 
   #
+  # Creates a new BannerClass object from a hash of properties.
+  # TODO: Convert _proper_ properties to attr_accessors?
+  #
+  def initialize(properties)
+
+    #Convert the properties into (publically accessible) instance variables.
+    properties.each do |name, value|
+      singleton_class.class_eval { attr_accessor name }
+      instance_variable_set "@#{name}", value
+    end
+
+  end
+
+  #
   # Creates an array of BannerCourses by parsing a Banner detailed course view.
   #
   # This is an ugly function-- but Banner is an ugly, ugly product. Since they provide
@@ -78,13 +92,19 @@ class BannerCourse
     #Merge in any information from the body.
     info.update(extract_info_from_body(body))
 
+    #Parse the date and time ranges.
     info[:date_range] = extract_dates(info[:date_range])
     info[:start_time], info[:duration] = extract_time_and_duration(info[:time_range])
 
-    #For now, return the info directly.
-    info
+    #Parse the credit count.
+    info[:credit_count] = info[:credit_count].to_f
+
+    #Convert the info into a BannerClass object.
+    new(info)
 
   end
+
+  private
 
   #
   # Converts a banner date into a defined start and end date.
@@ -125,7 +145,7 @@ class BannerCourse
   # header row in the course summary table.
   #
   def self.extract_info_from_header(row)
-    match_data_to_hash(COURSE_HEADER_FORMAT.match(row.text))
+    extract_data_using(COURSE_HEADER_FORMAT, row.text)
   end
 
 
@@ -134,8 +154,21 @@ class BannerCourse
   # of the course information in the course summary table.
   #
   def self.extract_info_from_body(row)
-    puts row.text
-    match_data_to_hash(COURSE_BODY_FORMAT.match(row.text))
+    extract_data_using(COURSE_BODY_FORMAT, row.text)
+  end
+
+  #
+  # Extracts information from a string using the provided
+  # regular expression, which should include named matches.
+  #
+  def self.extract_data_using(regexp, string)
+    
+    #If we have a non-string, see if it can be converted to a string.
+    string = string.text if string.respond_to?(:text)
+
+    #Extact the data itself.
+    match_data_to_hash(regexp.match(string))
+
   end
 
 

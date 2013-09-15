@@ -11,7 +11,10 @@ class PublicSchedule
   # 
   DEFAULT_URI = 'https://ssb.cc.binghamton.edu/banner'
 
-
+  #
+  # Return each of the banner URI suffixes associated
+  # with a given operation.
+  # 
   URI_SUFFIXES = {
     :get_course_sessions => 'bwckschd.p_get_crse_unsec'
   }

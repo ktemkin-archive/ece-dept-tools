@@ -1,3 +1,27 @@
+# 
+# The MIT License (MIT)
+# 
+# Copyright (c) 2013 Binghamton University
+# Copyright (c) 2013 Kyle J. Temkin <ktemkin@binghamton.edu>
+# 
+# Permission is hereby granted, free of charge, to any person obtaining a copy
+# of this software and associated documentation files (the "Software"), to deal
+# in the Software without restriction, including without limitation the rights
+# to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+# copies of the Software, and to permit persons to whom the Software is
+# furnished to do so, subject to the following conditions:
+# 
+# The above copyright notice and this permission notice shall be included in
+# all copies or substantial portions of the Software.
+# 
+# THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+# IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+# FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+# AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+# LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+# OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+# THE SOFTWARE.
+# 
 
 require 'date'
 require 'time'
@@ -7,6 +31,12 @@ require 'nokogiri'
 # Represents a course, as read from Banner.
 #
 class BannerCourse
+
+  #
+  # Store the list of day codes that banner uses to represent class occurrences.
+  # In order, starting from Sunday.
+  #
+  DAY_CODES = ['U', 'M', 'T', 'W', 'R', 'F', 'S']
 
   #
   # Specifies the CSS selector used to identify course tables.
@@ -19,7 +49,6 @@ class BannerCourse
   #
   COURSE_HEADER_SELECTOR = 'th.ddtitle a'
 
-
   #
   # A regular expression which parses a Banner course header.
   # This is composed of four parts:
@@ -29,25 +58,43 @@ class BannerCourse
   # - A section name, e.g. A 0.
   #
   #
-  COURSE_HEADER_FORMAT = /^\W(?<name>[^-]+) - (?<crn>\d+) - (?<number>[^-]+) - (?<section>[^-]+)\W$/
-
+  COURSE_HEADER_FORMAT = /^\W*(?<name>[^-]+) - (?<crn>\d+) - (?<number>[^-]+) - (?<section>[^-]+)\W*$/
 
   #
   # A regular expression which parses a Banner course body.
   #
   COURSE_BODY_FORMAT = /(?<description>.+)\nAssociated Term: (?<term>[^\n]+).*\nRegistration Dates: (?<registration_window>[^\n]+).*(?<credit_count>\d\.\d+) Credits.*Class\n(?<time_range>[^\n]+)\n(?<days>[^\n]+)\n(?<room>[^\n]+)\n(?<date_range>[^\n]+)\n(?<type>[^\n]+)\n(?<instructor>[^\n]+)/m
 
+  
+  #
+  # Define the course parameters which we want to be readable.
+  #
+  # In typical use, these parameters are provided upon instantiation;
+  # and are typically extracted from one of the regular expressions above.
+  # 
+  attr_reader :crn, :name, :number, :section, :description, :term
+  attr_reader :credit_count, :days, :room, :type, :instructor        
+  attr_reader :start_time, :end_time, :date_range, :registration_window
+
+  # Stores the total amount of simultaneous "sessions" that are occurring
+  # in this entry. In most cases, a single object will represent only a 
+  # single session. This is changed when multiple near-identical sessions
+  # are merged into one.
+  attr_accessor :count
+
   #
   # Creates a new BannerClass object from a hash of properties.
-  # TODO: Convert _proper_ properties to attr_accessors?
   #
   def initialize(properties)
 
     #Convert the properties into (publically accessible) instance variables.
     properties.each do |name, value|
-      singleton_class.class_eval { attr_accessor name }
       instance_variable_set "@#{name}", value
     end
+
+    #By default, count each course entry as only a single section
+    #at the given time. This can be changed by 
+    @count = 1
 
   end
 
@@ -57,10 +104,10 @@ class BannerCourse
   # This is an ugly function-- but Banner is an ugly, ugly product. Since they provide
   # _no_ clean way to machine parse their course output, we resort to this.
   #
-  def self.collection_from_html(html)
+  def self.collection_from_html(document)
 
-    #Parse the HTML into an XML tree.
-    document = Nokogiri::HTML(html)
+    #If we've been passed a string, convert it to a Nokogiri HTML document.
+    document = Nokogiri::HTML(document) if document.is_a? String
 
     #And convert each of the Data Display tables into an course node.
     nodes = []
@@ -86,6 +133,10 @@ class BannerCourse
   #
   def self.from_data_display_table(header, body)
 
+    #If we were given HTML strings, parse them.
+    header = Nokogiri::HTML(header) if header.is_a? String 
+    body   = Nokogiri::HTML(body) if body.is_a? String 
+
     #Create the initial course info object from the table provided.
     info = extract_info_from_header(header)
 
@@ -94,9 +145,11 @@ class BannerCourse
 
     #Parse the date and time ranges.
     info[:date_range] = extract_dates(info[:date_range])
-    info[:start_time], info[:duration] = extract_time_and_duration(info[:time_range])
+    info[:registration_window] = extract_dates(info[:registration_window], ' to ')
+    info[:start_time], info[:end_time] = extract_times(info[:time_range])
 
-    #Parse the credit count.
+    #Convert each of the numeric parameters to Ruby's internal representations.
+    info[:crn] = info[:crn].to_i
     info[:credit_count] = info[:credit_count].to_f
 
     #Convert the info into a BannerClass object.
@@ -104,17 +157,121 @@ class BannerCourse
 
   end
 
+  #
+  # Returns an array of every _time_ at which a session 
+  # occurs.
+  # 
+  def each_session_date
+
+    #If we weren't provided a block, convert this into an
+    #enumerator.
+    return enum_for(:each_session_date) unless block_given?
+
+    #Iterate over each day in which the given event can occur.
+    #If the event occurs on any given day, yield the time at
+    #which it occurs.
+    date_range.each do |day|
+      yield day if occurs_on?(day)
+    end
+
+  end
+
+  #
+  # Iterates over each of the session times for this 
+  #
+  def all_session_dates
+    each_session_date.to_a
+  end
+
+  #
+  # Returns true iff the given class should occur on the given day.
+  #
+  def occurs_on?(day)
+    date_range.include?(day) and days.include?(DAY_CODES[day.wday])
+  end
+
+  
+  #
+  # Returns true iff the provided BannerCourse is a different instance
+  # of this course. Courses are considered to be different instances of
+  # the same course if they have the same number, time, and type
+  #
+  def similar_to?(other)
+    start_time == other.start_time and 
+      type     == other.type       and 
+      number   == other.number     and
+      end_time == other.end_time   and
+      days     == other.days
+  end
+
+
+  #
+  # Merges a collection of course instances, 
+  #
+  def self.merge_course_instances(instances)
+
+    #Create a copy of the first provided instance.
+    new_instance = instances.first.clone
+
+    #Set its count to reflect the total amount of sessions...
+    new_instance.instance_variable_set(:@count, instances.count)
+
+    #If any of the instances have a different instructor, set the instructor to "multiple".
+    if instances.all? { |instance| instance.instructor ==  new_instance.instructor}
+      new_instance.instance_variable_set(:@instructor, 'Multiple')
+    end
+
+    #Return the new instance.
+    new_instance
+
+  end
+
+
+  #
+  # Merges any "similar" sessions into a single session element.
+  # Uses the definition of similiarity defined by "similar_to?" above.
+  #
+  def self.merge_similar_sessions(collection)
+
+    #Create an empty collection for the result.
+    new_collection = []
+
+    #Group similar sessions by "similarity hash".
+    groups = collection.group_by { |course| similarity_hash(course) }
+
+    #Merge all of the similar sessions into single elements, and add them to the collection.
+    #Sessions which have no similar sections will be added to the collection unmodified.
+    groups.each { |hash, group| new_collection << merge_course_instances(group) }
+
+    #Return the modified collection.
+    new_collection
+
+  end
+
+
+
   private
+
+
+  #
+  # Returns a simple "hash", which can be used to identify similar strings.
+  # This value will be the same for any two courses which are similar, and
+  # different otherwise.
+  #
+  def self.similarity_hash(course)
+    "#{course.start_time}-#{course.end_time}-#{course.type}-#{course.number}-#{course.days}"
+  end
+
 
   #
   # Converts a banner date into a defined start and end date.
   # Returns [start_date, end_date].
   # 
-  def self.extract_dates(date_range)
+  def self.extract_dates(date_range, partition = ' - ')
 
     #Break the date range into its pieces, and then parse them.
-    start_date, _,  end_date = date_range.partition(' - ')
-    return Date.parse(start_date), Date.parse(end_date)
+    start_date, _,  end_date = date_range.partition(partition)
+    return (DateTime.parse(start_date)..DateTime.parse(end_date))
 
   end
 
@@ -123,19 +280,22 @@ class BannerCourse
   # (which is represented as seconds past minute on a given day)
   # and a duration in seconds.
   #
-  def self.extract_time_and_duration(time_range)
+  def self.extract_times(time_range, partition = ' - ')
 
     #Break the time range down into its pieces.
-    start_time, _, end_time = time_range.partition(' - ')
+    start_time, _, end_time = time_range.partition(partition)
+
+    #Get a reference to midnight.
+    midnight = DateTime.parse("12:00 AM")
     
     #Find the starting time, with respect to the current day.
-    relative_start_time = Time.parse(start_time) - Time.parse("12:00 AM")
+    relative_start_time = DateTime.parse(start_time) - midnight
 
-    #Find the duration of the event, in minutes.
-    duration = Time.parse(end_time) - Time.parse(start_time)
+    #Find the end time, with respect to the current day.
+    relative_end_time = DateTime.parse(end_time) - midnight
 
     #Return the duration (in seconds) and the relative start time.
-    return relative_start_time, duration
+    return relative_start_time, relative_end_time
 
   end
 

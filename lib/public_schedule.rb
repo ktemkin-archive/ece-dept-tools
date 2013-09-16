@@ -77,9 +77,15 @@ class PublicSchedule
   #
   # Returns all sessions that match the subject code and class number.
   #
-  def get_course_sessions(subject_code, class_number)
+  # subject_code: A full subject code for a class name ("EECE 251"), or
+  #   a subject-only subject code ("EECE"). If the latter is provided, a
+  #   class_number must be provided as well.
+  # class_number: The course number ("251"), if not provided in the subject code.
+  #
+  def get_course_sessions(subject_code, class_number=nil)
 
-    
+    #If only a subject code was provided, try to split it into a course name and class number.
+    subject_code, class_number = subject_code.split if class_number.nil?
 
     #Build the request that will fetch the given course sessions.S
     #This (unfortunate) literal request is required by the Oracle server.

@@ -171,7 +171,7 @@ class BannerCourse
     #If the event occurs on any given day, yield the time at
     #which it occurs.
     date_range.each do |day|
-      yield day if occurs_on?(day)
+      yield day + start_time if occurs_on?(day)
     end
 
   end
@@ -217,7 +217,7 @@ class BannerCourse
     new_instance.instance_variable_set(:@count, instances.count)
 
     #If any of the instances have a different instructor, set the instructor to "multiple".
-    if instances.all? { |instance| instance.instructor ==  new_instance.instructor}
+    unless instances.all? { |instance| instance.instructor ==  new_instance.instructor}
       new_instance.instance_variable_set(:@instructor, 'Multiple')
     end
 

@@ -1,6 +1,7 @@
 #!/usr/bin/env ruby
 
 require 'calendar_builder'
+require 'fileutils'
 
 #
 # Specifies a list of files to create, and all of the 
@@ -22,6 +23,7 @@ courses = {
 }
 
 #Change to the output directory.
+FileUtils.mkdir_p('output')
 Dir.chdir('output')
 
 #Convert each of the courses above to an ICS file in the current directory.

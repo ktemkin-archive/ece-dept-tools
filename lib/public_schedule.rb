@@ -105,6 +105,20 @@ class PublicSchedule
   end
 
 
+  #
+  # Quick heuristic to gague the current semster.
+  # Should be replaced by a better algorithm.
+  # TODO: Replace me!
+  #
+  def self.current_session
+    case Time.now.month
+      when (1..5)  then :spring
+      when (6..7)  then :summer 
+      when (8..12) then :fall
+    end
+  end
+
+
   private
 
   #

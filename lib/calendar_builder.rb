@@ -41,7 +41,7 @@ class CalendarBuilder
   # Initialies a CalendarBuilder.
   # TODO: More intelligently determine the current semester?
   # 
-  def initialize(year = Time.now.year, session=:fall, range = DEFAULT_DATE_RANGE, unique = true)
+  def initialize(year = Time.now.year, session=PublicSchedule.current_session, range = DEFAULT_DATE_RANGE, unique = true)
 
     #Create a new connection to the public schedule of classes, 
     #from which we pull all course information, when needed.
@@ -139,9 +139,8 @@ class CalendarBuilder
       #Ensure that we're not enforcing a time zone.
       cal.default_tzid = :floating
 
-      #And addd 
-      each_session_date do |session, day|
-        add_event_to_calendar(cal, session, day)
+      @sessions.each do |session|
+         add_event_to_calendar(cal, session) 
       end
 
     end
@@ -150,7 +149,7 @@ class CalendarBuilder
   #
   # Adds an instance of the given session _at_ t
   #
-  def add_event_to_calendar(cal, session, day)
+  def add_event_to_calendar(cal, session)
 
     #Build a summary of the course, for calendar display.
     summary = "#{session.number} #{session.type}"
@@ -161,10 +160,13 @@ class CalendarBuilder
     #Add the session event to the calendar.
     cal.event do 
       summary       summary
-      dtstart       day + session.start_time
-      dtend         day + session.end_time
+      dtstart       session.date_range.first + session.start_time
+      dtend         session.date_range.first + session.end_time
       location      session.room
       description   "Instructor: #{session.instructor}\n\nDescription: #{session.description}"
+
+      #And set up a recurrance pattern that includes all of instances of this session.
+      rdate(*session.all_session_dates)
     end
   end
 

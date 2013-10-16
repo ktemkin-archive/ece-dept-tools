@@ -140,6 +140,10 @@ class CalendarBuilder
       cal.default_tzid = :floating
 
       @sessions.each do |session|
+
+         #Skip any events that don't have dates.
+         next unless session.start_time and session.end_time and session.date_range
+
          add_event_to_calendar(cal, session) 
       end
 
@@ -162,7 +166,7 @@ class CalendarBuilder
       summary       summary
       dtstart       session.date_range.first + session.start_time
       dtend         session.date_range.first + session.end_time
-      location      session.room
+      location      session.room if session.room
       description   "Instructor: #{session.instructor}\n\nDescription: #{session.description}"
 
       #And set up a recurrance pattern that includes all of instances of this session.

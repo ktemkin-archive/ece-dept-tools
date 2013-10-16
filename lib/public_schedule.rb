@@ -25,8 +25,8 @@ class PublicSchedule
   SEMESTER_CODE = {
     :fall   => 90,
     :summer => 60,
-    :winter => 20,
-    :spring => 10
+    :winter => 10,
+    :spring => 20
   }
 
   #
@@ -63,7 +63,7 @@ class PublicSchedule
       :end_ap        => 'a'
     }
 
-  def initialize(year=Time.now.year, semester=:fall, uri=nil)
+  def initialize(year=Time.now.year, semester=PublicSchedule.current_session, uri=nil)
 
     #Record the year and the semester.
     @semester_id = semester_id_for(year, semester)
@@ -98,6 +98,8 @@ class PublicSchedule
 
     #... and fetch the raw course data.
     raw_course_data = perform_banner_request(:get_course_sessions, request).body
+
+    p raw_course_data
 
     #Convert the raw data to a collection of course objects, and return.
     BannerCourse.collection_from_html(raw_course_data)

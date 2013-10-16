@@ -9,16 +9,7 @@ require 'fileutils'
 courses = {
 
   #Common core.
-  'ece_sophomore' => ['EECE 251', 'EECE 281', 'MATH 371', 'CS 211', 'PHYS 132'],
-  'ece_junior'    => ['EECE 301', 'EECE 315', 'EECE 382'],
-  'ece_senior'    => ['EECE 487'],
-
-  #Electrical engineering.
-  'ee_junior'  => ['EECE 332', 'MATH 323'],
-
-  #Computer engineering.
-  'coe_junior' => ['EECE 351', 'MATH 314'],
-  'coe_senior' => ['CS 311']
+  'spring' => ['EECE 252', 'EECE 260', 'ISE 261', 'CS 212']
 
 }
 

@@ -119,7 +119,10 @@ class BannerCourse
       next if header.nil? or body.nil?
 
       #Otherwise, use the pair of rows to get the course's information.
-      nodes << self.from_data_display_table(header, body) 
+      begin
+        nodes << self.from_data_display_table(header, body) 
+      rescue ArgumentError, NoMethodError
+      end
 
     end
 
@@ -151,6 +154,53 @@ class BannerCourse
     #Convert each of the numeric parameters to Ruby's internal representations.
     info[:crn] = info[:crn].to_i
     info[:credit_count] = info[:credit_count].to_f
+
+    #Convert the info into a BannerClass object.
+    new(info)
+
+  end
+
+  #
+  # Converts a CSV row to a Banner course instance.
+  # Requires an object containing all known class properties;
+  # which should include at least a date_range.
+  #
+  def self.from_csv_row(csv, info={})
+   
+    #TODO: abstract to class const  
+    mappings = {
+      'CRN' => :crn,
+      'Title Short Desc' => :name,
+      'Cr' => :credit_count,
+      'Meet' => :days,
+      'Instructor' => :instructor,
+      'Location' => :room
+    }
+
+    #Create the info object from the CSV field 
+    info = Hash[mappings.map {|k, v| [v, csv[k]] }] 
+
+    #Populate the fields that aren't a direct mapping.
+    info[:number] = "EECE #{csv['#']}".strip
+    info[:start_time] = parse_csv_time(csv['Begin']) if csv['Begin']
+    info[:end_time] = parse_csv_time(csv['End']) if csv['End'] 
+
+    #If no date range was provided, use the current week.
+    unless info[:date_range]
+
+      #Compute Date objects for the previous Sunday, and the next Saturday.
+      today = Date.today
+      sunday = today - today.wday
+      saturday = sunday + 6
+
+      #Convert the two dates to DateTimes.
+      #TODO: DRY up?
+      sunday = DateTime.parse(sunday.to_s)
+      saturday = DateTime.parse(saturday.to_s)
+      
+      #... and use them to populate a date range.
+      info[:date_range] = (sunday..saturday)
+    end
 
     #Convert the info into a BannerClass object.
     new(info)
@@ -296,6 +346,20 @@ class BannerCourse
 
     #Return the duration (in seconds) and the relative start time.
     return relative_start_time, relative_end_time
+
+  end
+
+  #
+  # Converts a CSV time to a "raw" time, in the same format as
+  # the two times returned by extract_times.
+  #
+  def self.parse_csv_time(time)
+
+    #Convert the time to a format Ruby can understand...
+    time = "#{time[0..1]}:#{time[2..3]}"
+
+    #Return the starting time, with respect to the current day.
+    DateTime.parse(time) - DateTime.parse("12:00 AM")
 
   end
 

@@ -30,6 +30,8 @@ gem 'typhoeus', '~>0.6.5'
 gem 'activesupport'
 gem 'nokogiri'
 gem 'ri_cal' 
+gem 'sinatra'
+gem 'roo'
 
 #And specify each of the development-only gems.
 group :development do

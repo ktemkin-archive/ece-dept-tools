@@ -41,7 +41,8 @@ class CalendarBuilder
   # Initialies a CalendarBuilder.
   # TODO: More intelligently determine the current semester?
   # 
-  def initialize(year = Time.now.year, session=PublicSchedule.current_session, range = DEFAULT_DATE_RANGE, unique = true)
+  #def initialize(year = Time.now.year, session=PublicSchedule.current_session, range = DEFAULT_DATE_RANGE, unique = true)
+  def initialize(year = 2014, session=:spring, range = DEFAULT_DATE_RANGE, unique = true)
 
     #Create a new connection to the public schedule of classes, 
     #from which we pull all course information, when needed.
@@ -156,7 +157,7 @@ class CalendarBuilder
   def add_event_to_calendar(cal, session)
 
     #Build a summary of the course, for calendar display.
-    summary = "#{session.number} #{session.type}"
+    summary = "#{session.number} #{session.type} - #{session.name}"
 
     #If this course has multiple sessions, append that information to the title.
     summary = "#{summary} (#{session.count})" if session.count > 1

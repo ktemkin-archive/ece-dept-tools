@@ -44,12 +44,6 @@ class BannerCourse
   COURSE_ENTRY_SELECTOR = '.pagebodydiv > table.datadisplaytable[summary="This layout table is used to present the sections found"] > tr'
 
   #
-  # Specifies the CSS used to extract the course's header from 
-  # the given course.
-  #
-  COURSE_HEADER_SELECTOR = 'th.ddtitle a'
-
-  #
   # A regular expression which parses a Banner course header.
   # This is composed of four parts:
   # - A course "section name", e.g. Digital Logic Design (LEC)
@@ -63,7 +57,12 @@ class BannerCourse
   #
   # A regular expression which parses a Banner course body.
   #
-  COURSE_BODY_FORMAT = /(?<description>.+)\nAssociated Term: (?<term>[^\n]+).*\nRegistration Dates: (?<registration_window>[^\n]+).*(?<credit_count>\d\.\d+) Credits.*Class\n(?<time_range>[^\n]+)\n(?<days>[^\n]+)\n(?<room>[^\n]+)\n(?<date_range>[^\n]+)\n(?<type>[^\n]+)\n(?<instructor>[^\n]+)/m
+  COURSE_BODY_FORMAT = /(?<description>.+)\nAssociated Term: (?<term>[^\n]+).*\nRegistration Dates: (?<registration_window>[^\n]+).*(?<credit_count>\d\.\d+) Credits/m
+
+  #
+  # A regular expression which parses a Banner meet pattern.
+  #
+  COURSE_MEET_FORMAT = /Class\n(?<time_range>[^\n]+)\n(?<days>[^\n]+)\n(?<room>[^\n]+)\n(?<date_range>[^\n]+)\n(?<type>[^\n]+)\n(?<instructor>[^\n]+)/m
 
   
   #
@@ -113,14 +112,14 @@ class BannerCourse
     nodes = []
 
     #Parse each of the entries in the course table.
-    document.css(COURSE_ENTRY_SELECTOR).each_slice(2) do |header, body| 
+    each_data_display_table_in(document) do |header, body, meet_pattern|
 
       #If we have an unmatched element, skip it.
       next if header.nil? or body.nil?
 
       #Otherwise, use the pair of rows to get the course's information.
       begin
-        nodes << self.from_data_display_table(header, body) 
+        nodes << self.from_data_display_table(header, body, meet_pattern) 
       rescue ArgumentError, NoMethodError
       end
 
@@ -131,29 +130,34 @@ class BannerCourse
 
   end
 
+
   #
   # Creates a new BannerCourse from a Banner data display table.
   #
-  def self.from_data_display_table(header, body)
+  def self.from_data_display_table(header, body, meet_pattern)
+    
 
     #If we were given HTML strings, parse them.
-    header = Nokogiri::HTML(header) if header.is_a? String 
-    body   = Nokogiri::HTML(body) if body.is_a? String 
+    header       = Nokogiri::HTML(header) if header.is_a? String 
+    body         = Nokogiri::HTML(body) if body.is_a? String 
 
     #Create the initial course info object from the table provided.
     info = extract_info_from_header(header)
 
     #Merge in any information from the body.
     info.update(extract_info_from_body(body))
+    info.update(extract_info_from_meet_pattern(meet_pattern))
 
-    #Parse the date and time ranges.
+    #Parse the date ranges.
     info[:date_range] = extract_dates(info[:date_range])
     info[:registration_window] = extract_dates(info[:registration_window], ' to ')
-    info[:start_time], info[:end_time] = extract_times(info[:time_range])
 
     #Convert each of the numeric parameters to Ruby's internal representations.
     info[:crn] = info[:crn].to_i
     info[:credit_count] = info[:credit_count].to_f
+
+    #Extract the starting and ending times.
+    info[:start_time], info[:end_time] = extract_times(info[:time_range])
 
     #Convert the info into a BannerClass object.
     new(info)
@@ -174,14 +178,15 @@ class BannerCourse
       'Cr' => :credit_count,
       'Meet' => :days,
       'Instructor' => :instructor,
-      'Location' => :room
+      'Location' => :room,
+      'Type' => :type
     }
 
     #Create the info object from the CSV field 
     info = Hash[mappings.map {|k, v| [v, csv[k]] }] 
 
     #Populate the fields that aren't a direct mapping.
-    info[:number] = "EECE #{csv['#']}".strip
+    info[:number] = "#{csv['Dept']} #{csv['#']}".strip
     info[:start_time] = parse_csv_time(csv['Begin']) if csv['Begin']
     info[:end_time] = parse_csv_time(csv['End']) if csv['End'] 
 
@@ -298,9 +303,53 @@ class BannerCourse
 
   end
 
+  def inspect
+    "<BannerCourse: #@number at #@time_range, #@days>"
+  end
+
 
 
   private
+
+  #
+  # Iterates over each Data Display Table found in the given document.
+  # Data display tables are the fundamental "unit" of Banner course displays.
+  #
+  def self.each_data_display_table_in(document)
+
+    #Start off by assuming we don't have a header.
+    header = nil
+
+    #Iterate overy each course "entry".
+    #Banner's format isn't exactly condusive to parsing:
+    #headers and bodies are encoded identically. We pull
+    #them apart according to which regex they match.
+    document.css(COURSE_ENTRY_SELECTOR).each do |entry|
+
+      #If the given item is a course header,
+      #store it, and continue to the next entry.
+      if COURSE_HEADER_FORMAT =~ entry
+        header = entry
+        next
+      end
+
+      #If we don't have a valid header, continue.
+      next unless header
+
+      #Yields the relevant information for each meet pattern in a given
+      #data display table.
+      each_meet_pattern_in(entry) { |meet| yield header, entry, meet }
+
+    end
+  end
+
+  #
+  # Iterates over each meet pattern present in a banner course body.
+  #
+  def self.each_meet_pattern_in(display_table_body)
+    #This is ugly, but it's apparently the best way to get "all matching strings" in ruby.
+    display_table_body.text.scan(COURSE_MEET_FORMAT) { yield Regexp.last_match.to_s }
+  end
 
 
   #
@@ -355,6 +404,10 @@ class BannerCourse
   #
   def self.parse_csv_time(time)
 
+    #Ensure the time has exactly four characters,
+    #adding leading zeroes are necessary.
+    time = time.rjust(4, '0')
+
     #Convert the time to a format Ruby can understand...
     time = "#{time[0..1]}:#{time[2..3]}"
 
@@ -379,6 +432,10 @@ class BannerCourse
   #
   def self.extract_info_from_body(row)
     extract_data_using(COURSE_BODY_FORMAT, row.text)
+  end
+
+  def self.extract_info_from_meet_pattern(meet_pattern)
+    extract_data_using(COURSE_MEET_FORMAT, meet_pattern)
   end
 
   #

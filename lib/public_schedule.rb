@@ -99,8 +99,6 @@ class PublicSchedule
     #... and fetch the raw course data.
     raw_course_data = perform_banner_request(:get_course_sessions, request).body
 
-    p raw_course_data
-
     #Convert the raw data to a collection of course objects, and return.
     BannerCourse.collection_from_html(raw_course_data)
 

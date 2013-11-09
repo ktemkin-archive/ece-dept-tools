@@ -3,27 +3,25 @@
 require 'calendar_builder'
 require 'fileutils'
 
+
 #
-# Specifies a list of files to create, and all of the 
+# Specifies a list of files to create, and all of the courses that should be contained.
 #
 courses = {
 
   #Common core.
-  'ece_sophomore' => ['EECE 251', 'EECE 281', 'MATH 371', 'CS 211', 'PHYS 132'],
-  'ece_junior'    => ['EECE 301', 'EECE 315', 'EECE 382'],
-  'ece_senior'    => ['EECE 487'],
+  'ece_sophomore' => ['ISE 261', 'EECE 287', 'EECE 260', 'CS 212'],
+  'ece_junior'    => ['EECE 387'],
+  'ece_senior'    => ['EECE 488'],
 
   #Electrical engineering.
-  'ee_junior'  => ['EECE 332', 'MATH 323'],
+  'ee_junior'  => ['EECE 323', 'EECE 361', 'EECE 377'],
 
   #Computer engineering.
-  'coe_junior' => ['EECE 351', 'MATH 314'],
-  'coe_senior' => ['CS 311'],
+  'coe_junior' => ['EECE 352', 'EECE 359'],
 
   #Graduate Studens
-  'graduate' => ['EECE 502', 'EECE 504', 'EECE 505X', 'EECE 506', 'EECE 507', 'EECE 510', 'EECE 515', 'EECE 520', 'EECE 530',
-                 'EECE 542', 'EECE 545', 'EECE 552', 'EECE 553', 'EECE 560', 'EECE 562', 'EECE 574', 'EECE 580B', 'EECE580E']
-
+  'graduate' => %w(503 508 521 522 566X 570 573 575 578X 580A 580D 580F 658A).map { |number| "EECE #{number}"}
 }
 
 #Change to the output directory.

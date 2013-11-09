@@ -133,7 +133,7 @@ class CalendarBuilder
   def create_internal_calendar
    
     #If we have a valid calendar, return it directly.
-    return @calender unless @calendar.nil?
+    return @calendar unless @calendar.nil?
 
     @calendar = RiCal.Calendar do |cal|
 
@@ -162,17 +162,25 @@ class CalendarBuilder
     #If this course has multiple sessions, append that information to the title.
     summary = "#{summary} (#{session.count})" if session.count > 1
 
+    #Get the beginning and end "times" for the first class of this session.
+    #The ICS uses this as the "root" element; all recurrances are with respect
+    #to this first date.
+    first_session_start, first_session_end = session.first_session_dates
+
     #Add the session event to the calendar.
     cal.event do 
       summary       summary
-      dtstart       session.date_range.first + session.start_time
-      dtend         session.date_range.first + session.end_time
+      dtstart       first_session_start
+      dtend         first_session_end
       location      session.room if session.room
       description   "Instructor: #{session.instructor}\n\nDescription: #{session.description}"
 
       #And set up a recurrance pattern that includes all of instances of this session.
-      rdate(*session.all_session_dates)
+      #Note that we exclude the first session date, which we include above.
+      rdate(*session.all_session_dates.drop(1))
+
     end
+
   end
 
 

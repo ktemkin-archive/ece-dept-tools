@@ -52,7 +52,7 @@ class BannerCourse
   # - A section name, e.g. A 0.
   #
   #
-  COURSE_HEADER_FORMAT = /^\W*(?<name>[^-]+) - (?<crn>\d+) - (?<number>[^-]+) - (?<section>[^-]+)\W*$/
+  COURSE_HEADER_FORMAT = /^\W*(?<name>.+) - (?<crn>\d+) - (?<number>[^-]+) - (?<section>[^-]+)\W*$/
 
   #
   # A regular expression which parses a Banner course body.
@@ -62,7 +62,7 @@ class BannerCourse
   #
   # A regular expression which parses a Banner meet pattern.
   #
-  COURSE_MEET_FORMAT = /Class\n(?<time_range>[^\n]+)\n(?<days>[^\n]+)\n(?<room>[^\n]+)\n(?<date_range>[^\n]+)\n(?<type>[^\n]+)\n(?<instructor>[^\n]+)/m
+  COURSE_MEET_FORMAT = /(?<base_type>Class|Activity)\n(?<time_range>[^\n]+)\n(?<days>[^\n]+)\n(?<room>[^\n]+)\n(?<date_range>[^\n]+)\n(?<type>[^\n]+)\n(?<instructor>[^\n]+)/m
 
   
   #
@@ -232,6 +232,13 @@ class BannerCourse
   end
 
   #
+  # Finds the first session date for the given session.
+  #
+  def first_session_dates
+    date_range.each { |day| return day + start_time, day + end_time if occurs_on?(day) }
+  end
+
+  #
   # Iterates over each of the session times for this 
   #
   def all_session_dates
@@ -242,7 +249,7 @@ class BannerCourse
   # Returns true iff the given class should occur on the given day.
   #
   def occurs_on?(day)
-    date_range.include?(day) and days.include?(DAY_CODES[day.wday])
+    date_range.include?(day) && days.include?(DAY_CODES[day.wday])
   end
 
   
@@ -303,6 +310,9 @@ class BannerCourse
 
   end
 
+  #
+  # Display this course nicely.
+  #
   def inspect
     "<BannerCourse: #@number at #@time_range, #@days>"
   end

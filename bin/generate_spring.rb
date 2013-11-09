@@ -21,7 +21,7 @@ courses = {
   'coe_junior' => ['EECE 352', 'EECE 359'],
 
   #Graduate Studens
-  'graduate' => %w(503 508 521 522 566X 570 573 575 578X 580A 580D 580F 658A).map { |number| "EECE #{number}"}
+  'graduate' => %w(503 508 521 522 566X 570 573 575 578X 580A 580F 658).map { |number| "EECE #{number}"}
 }
 
 #Change to the output directory.
